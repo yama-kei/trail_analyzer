@@ -6,7 +6,7 @@ Trail Route Analytics is a web appcalition that analyzes trail route and activit
 
 Web Interface
 -------------
-Trail Route Analytics depends on following 
+Trail Route Analytics depends on following components to render web interface
 
 * Flask
 * Jinja2
@@ -16,17 +16,20 @@ Trail Route Analytics depends on following
 
 GPX Parsing
 -----------
-[gpxpy](https://github.com/tkrajina/gpxpy) library is used for parsing GPX file.
+* [gpxpy](https://github.com/tkrajina/gpxpy) library is used for parsing GPX file.
 
 GV Analysis
 -----------
 For GV Analysis implemented as part of application, following libraries are used
+
 * numpy
 * scipy
+* Savitzky-Golay Filter (taken from [Cookbook](http://scipy-cookbook.readthedocs.org/items/SavitzkyGolay.html))
 
 See also
 --------
 * [Development Blog](http://trail-route-analytics.blogspot.jp/)
+* [Demo instance on Heroku](http://trail-route-analytics.herokuapp.com/)
 
 License
 -------
