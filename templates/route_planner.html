@@ -1,0 +1,226 @@
+{% extends "layout.html" %}
+{% import "dump_renderer.html" as dumper %}
+
+{% block content %}
+<p class="bg-primary">Processed GPX file: {{ filename }}</p>
+<div class="input-group">
+	<form enctype="multipart/form-data" action="planner" method="POST">
+		<input type="file" class="form-control" name="gpxfile"/>
+		<button type="submit" class="btn btn-primary btn-lg">Analyze!</button>
+	</form>
+</div>
+
+<h2>Activity Summary</h2>
+<ul class="nav nav-tabs nav-justified">
+	<li class="active"><a href="#overall" data-toggle="tab">Overall</a></li>
+	<li><a href="#climb" data-toggle="tab">Climb</a></li>
+	<li><a href="#downhill" data-toggle="tab">Downhill</a></li>
+	<li><a href="#flat" data-toggle="tab">Flat</a></li>
+</ul>
+
+<div id="SummaryContent" class="tab-content">
+	<div class="tab-pane fade in active" id="overall">
+		{{ dumper.dump_data(header, dump, ["length_2d", "length_3d", "ascent", "descent"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="climb">
+		{{ dumper.dump_data(header, dump, ["ascent_data-total_dist_3d", "ascent_data-total_altitude_gain"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="downhill">
+		{{ dumper.dump_data(header, dump, ["descent_data-total_dist_3d", "descent_data-total_altitude_gain"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="flat">
+		{{ dumper.dump_data(header, dump, ["flat_data-total_dist"]) }}
+	</div>
+</div>
+
+<h2>Course Time Estimate</h2>
+{{ dumper.dump_data(header, dump, ["ascent_data-estimated_time", "descent_data-estimated_time", "flat_data-estimated_time", "estimated_stopped_time", "estimated_total_time"]) }}
+
+<p>
+<input id="ascent_speed" type="text" data-slider-min="5" data-slider-max="25" data-slider-step="1" data-slider-value="12"/>
+<span id="AscSpdSliderValLabel">Ascent Speed: <span id="ascentSpd">12</span>m/min</span>
+</p><p>
+<input id="descent_speed" type="text" data-slider-min="5" data-slider-max="30" data-slider-step="1" data-slider-value="14"/>
+<span id="DescSpdSliderValLabel">Descent Speed: <span id="descentSpd">14</span>m/min</span>
+</p><p>
+<input id="flat_speed" type="text" data-slider-min="4" data-slider-max="30" data-slider-step="1" data-slider-value="12"/>
+<span id="FlatSpdCurrentSliderValLabel">Flat Pace: <span id="flatSpd">12</span>min/km</span>
+</p><p>
+<input id="stopped_time_ratio" type="text" data-slider-min="0" data-slider-max="30" data-slider-step="1" data-slider-value="10"/>
+<span id="StoppedTimeRatioCurrentSliderValLabel">Stopped Time Ratio: <span id="stoppedTimeRatio">10</span>%</span>
+</p>
+
+<h2>Graph and Map</h2>
+<ul class="nav nav-tabs nav-justified">
+<li class="active"><a href="#profile_graph" data-toggle="tab">Profile</a></li>
+<li><a href="#grade_graph" data-toggle="tab">Grade</a></li>
+<li><a href="#map" data-toggle="tab">Map</a></li>
+</ul>
+
+<div id="GraphContent" class="tab-content">
+	<div class="tab-pane fade in active" id="profile_graph">
+	 <div id="profile_graph" style="width:100%; height:350pt"></div>
+	 </div>
+
+	 <div class="tab-pane fade" id="grade_graph">
+	 <div id="grade_graph" style="width:100%; height:350pt"></div>
+	 </div>
+
+	 <div class="tab-pane fade" id="map">
+	 <div id="trail_map" style="width:100%; height:350pt"></div>
+	 </div>
+</div>
+
+<script type='text/javascript' src='http://www.google.com/jsapi'></script>
+<script type='text/javascript'>
+	 google.load("maps", "3.x", {"other_params":"sensor=false"});
+	 google.load("visualization", "1", {packages: ["corechart", "line"]});
+
+	// graphs and estimates computed when page is loaded
+	google.setOnLoadCallback(profileGraph)
+	google.setOnLoadCallback(updateEstimate);
+
+	// graphs and estimates computed when page is loaded
+	google.setOnLoadCallback(profileGraph)
+	google.setOnLoadCallback(updateEstimate);
+
+	 // handle tab switch
+	$('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+			var activated_tab = $(e.target).attr("href");
+			if (activated_tab == "#grade_graph"){
+				gradeGraph()
+			}else if (activated_tab == "#map"){
+				drawMap()
+			}
+	})
+
+	function dump_time(time_in_min){
+		hour = Math.floor(time_in_min / 60);
+		min = time_in_min % 60;
+		return (hour.toFixed(0) + ":" + min.toFixed(0) + ":00");
+	}
+
+	 function updateEstimate(){
+			// get parameters
+			var ascSpd = document.getElementById("ascentSpd").innerHTML;
+			var descSpd = document.getElementById("descentSpd").innerHTML;
+			var flatSpd = document.getElementById("flatSpd").innerHTML;
+			var stoppedRatio = document.getElementById("stoppedTimeRatio").innerHTML;
+			// calculate estimates
+			var ascTime = (document.getElementById("ascent_data-total_altitude_gain").innerHTML / ascSpd);
+			var descTime = Math.abs((document.getElementById("descent_data-total_altitude_gain").innerHTML) / Math.abs(descSpd));
+			var flatTime = (flatSpd * Math.abs(document.getElementById("flat_data-total_dist").innerHTML));
+			var movingTime = ascTime + descTime + flatTime;
+			var stoppedTime = (movingTime / (1-(stoppedRatio/100))) - movingTime;
+			var totalTime = movingTime + stoppedTime;
+			// update estimates
+			document.getElementById("ascent_data-estimated_time").innerHTML = dump_time(ascTime)
+			document.getElementById("descent_data-estimated_time").innerHTML = dump_time(descTime)
+			document.getElementById("flat_data-estimated_time").innerHTML = dump_time(flatTime)
+			document.getElementById("estimated_stopped_time").innerHTML = dump_time(stoppedTime)
+			document.getElementById("estimated_total_time").innerHTML = dump_time(totalTime)
+	 }
+
+	// Slider control
+	$("#ascent_speed").slider();
+	$("#ascent_speed").on("slide", function(slideEvt) {
+		$("#ascentSpd").text(slideEvt.value);
+		updateEstimate();
+	});
+	$("#descent_speed").slider();
+	$("#descent_speed").on("slide", function(slideEvt) {
+			$("#descentSpd").text(slideEvt.value);
+			updateEstimate();
+	});
+	$("#flat_speed").slider();
+	$("#flat_speed").on("slide", function(slideEvt) {
+		$("#flatSpd").text(slideEvt.value);
+		updateEstimate();
+	});
+	$("#stopped_time_ratio").slider();
+	$("#stopped_time_ratio").on("slide", function(slideEvt) {
+		$("#stoppedTimeRatio").text(slideEvt.value);
+		updateEstimate();
+	});
+
+	function drawMap() {
+		var opts = {
+		mapTypeId:	google.maps.MapTypeId.SATELLITE,
+	};
+	var map = new google.maps.Map(document.getElementById("trail_map"), opts);
+	{% set (coordinates, (min_lat, max_lat, min_long, max_long)) = data.get("routeCoordinates") %}
+		var trailDataCoordinates = [
+			{% for (lat, long) in coordinates %}new google.maps.LatLng({{ lat }}, {{ long }}),
+			{% endfor %}
+		];
+		var trailPath = new google.maps.Polyline({
+			path: trailDataCoordinates,
+			strokeColor: "#FF0000",
+			strokeOpacity: 0.6,
+			strokeWeight: 5
+		});
+		var sw = new google.maps.LatLng({{ max_lat }} ,{{ min_long }} );
+		var ne = new google.maps.LatLng({{ min_lat }} ,{{ max_long }} );
+		var bounds = new google.maps.LatLngBounds(sw, ne);
+		map.fitBounds(bounds,5);
+		trailPath.setMap(map);
+	}
+
+	function profileGraph() {
+			var data = new google.visualization.DataTable();
+			data.addColumn('number', 'X');
+			data.addColumn('number', 'altitude (m)');
+			data.addRows( {{ data.get("profile_data") }} )
+			var options = {
+				title: 'Profile Graph',
+				hAxis: {
+					title: 'Distance (km)'
+			},
+			vAxis: {
+				title: 'Altitude (m)'
+			},
+		};
+		var chart = new google.visualization.LineChart(document.getElementById('profile_graph'));
+		chart.draw(data, options);
+	}
+
+	 function gradeGraph() {
+		var data = new google.visualization.DataTable();
+		data.addColumn('number', 'X');
+		data.addColumn('number', '3D Distance(m)');
+		data.addRows( {{ data.get("grade_data") }} )
+		var options = {
+			hAxis: {
+				title: 'Grade (%)'
+			},
+			vAxis: {
+				title: '3D Distance (m)'
+			},
+			title: 'Grade Distribution',
+		};
+		var chart = new google.visualization.ColumnChart(document.getElementById('grade_graph'));
+		chart.draw(data, options);
+	}
+
+	function timeGraph() {
+		var data = google.visualization.arrayToDataTable(
+			 {{ stacked_time | safe}}
+		);
+		var options = {
+			hAxis: {
+				title: 'Time (min)'
+			},
+			title: 'Time per segment type',
+			legend: { position: 'top', maxLines: 3 },
+			bar: { groupWidth: '75%' },
+				isStacked: true
+		};
+		var chart = new google.visualization.BarChart(document.getElementById('time_graph'));
+		chart.draw(data, options);
+	}
+</script>
+
+{% endblock %}

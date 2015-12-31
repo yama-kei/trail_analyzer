@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="jumbotron">
+  <h1>Analyze it!</h1>
+  <p>Submit log data in GPX format and Trail Route Analytics let you analyze your climbing/trail running/speed hiking activity.</p>
+  <div class="input-group">
+  <form enctype="multipart/form-data" action="analyze" method="POST">
+    <input type="file" class="form-control" name="gpxfile"/>
+    <button type="submit" class="btn btn-primary btn-lg">Submit</button>
+  </form>
+  </div>
+</div>
+<p class="bg-info">Tool only accepts <a href="http://en.wikipedia.org/wiki/GPS_Exchange_Format">GPX formatted</a> file at a momemt. You can export GPX file out from your GPS device/application(e.g. 'Export' menu of MyTracks), or download from various websites where route data is available.</p>
+<p class="bg-warning">Please note that tool does not support GPX file containing multiple days/set of activities, so you should split your activities accordingly.</p>
+{% endblock %}

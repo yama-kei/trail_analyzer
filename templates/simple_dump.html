@@ -1,0 +1,272 @@
+{% extends "layout.html" %}
+{% import "dump_renderer.html" as dumper %}
+
+{% block content %}
+<p class="bg-primary">Processed GPX file: {{ filename }}</p>
+<div class="input-group">
+<form enctype="multipart/form-data" action="analyze" method="POST">
+	<input type="file" class="form-control" name="gpxfile"/>
+	<button type="submit" class="btn btn-primary btn-lg">Analyze!</button>
+</form>
+</div>
+
+<h2>Activity Summary</h2>
+<ul class="nav nav-tabs nav-justified">
+<li class="active"><a href="#course" data-toggle="tab">Course</a></li>
+<li><a href="#activity" data-toggle="tab">Activity</a></li>
+<li><a href="#stats" data-toggle="tab">Statistics</a></li>
+<li><a href="#asc" data-toggle="tab">Ascent</a></li>
+<li><a href="#desc" data-toggle="tab">Descent</a></li>
+</ul>
+
+<div id="SummaryContent" class="tab-content">
+	<div class="tab-pane fade in active" id="course">
+	    {{ dumper.dump_data(header, dump, ["length_2d", "length_3d", "ascent", "descent"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="activity">
+	    {{ dumper.dump_data(header, dump, ["total_time", "stopped_time2", "stopped_time_ratio", "start_time", "end_time"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="stats">
+	    {{ dumper.dump_data(header, dump, ["vh_max_g", "vh_max_v", "asc_min_v", "dsc_asc_ratio"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="asc">
+	    {{ dumper.dump_data(header, dump, ["asc_nth_percentile", "asc_min_g", "asc_min_v"]) }}
+	</div>
+
+	<div class="tab-pane fade" id="desc">
+	    {{ dumper.dump_data(header, dump, ["dsc_nth_percentile", "dsc_min_g", "dsc_min_v"]) }}
+	</div>
+</div>
+
+<h2>Graph and Map</h2>
+<ul class="nav nav-tabs nav-justified">
+<li class="active"><a href="#profile_graph" data-toggle="tab">Profile</a></li>
+<li><a href="#grade_graph_dist" data-toggle="tab">Grade v.s. Dist</a></li>
+<li><a href="#grade_graph_time" data-toggle="tab">Grade v.s. Time</a></li>
+<li><a href="#grade_h_velocity" data-toggle="tab">Grade v.s. H Speed</a></li>
+<li><a href="#grade_v_velocity" data-toggle="tab">Grade v.s. V Speed</a></li>
+<li><a href="#map" data-toggle="tab">Map</a></li>
+</ul>
+
+<div id="GraphContent" class="tab-content">
+	<div class="tab-pane fade in active" id="profile_graph">
+    <div id="profile_graph" style="width:100%; height:350pt"></div>
+    </div>
+
+    <div class="tab-pane fade" id="grade_graph_dist">
+    <div id="grade_graph_dist" style="width:100%; height:350pt"></div>
+    </div>
+
+    <div class="tab-pane fade" id="grade_graph_time">
+    <div id="grade_graph_time" style="width:100%; height:350pt"></div>
+    </div>
+
+    <div class="tab-pane fade" id="grade_h_velocity">
+    <div id="grade_h_velocity" style="width:100%; height:350pt"></div>
+    </div>
+
+    <div class="tab-pane fade" id="grade_v_velocity">
+    <div id="grade_v_velocity" style="width:100%; height:350pt"></div>
+    </div>
+
+    <div class="tab-pane fade" id="map">
+    <div id="trail_map" style="width:100%; height:350pt"></div>
+    </div>
+</div>
+
+<script type='text/javascript'>
+    if(window.google === undefined) {
+        alert("Google Java Script API didn't load! - Some features won't be available");
+    }
+    google.load("maps", "3.x", {"other_params":"sensor=false"});
+    google.load("visualization", "1", {packages: ["corechart", "line"]});
+
+    google.setOnLoadCallback(profileGraph)
+
+    // handle tab switch
+    $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+        var activated_tab = $(e.target).attr("href");
+        if (activated_tab == "#grade_graph_dist"){
+            gradeGraphDist()
+        }else if (activated_tab == "#grade_graph_time"){
+            gradeGraphTime()
+        }else if (activated_tab == "#grade_h_velocity"){
+            gradeHorizontalVelocity()
+        }else if (activated_tab == "#grade_v_velocity"){
+            gradeVerticalVelocity()
+        }else if (activated_tab == "#map"){
+            drawMap()
+        }
+    })
+
+    function profileGraph() {
+        var data = new google.visualization.DataTable();
+        data.addColumn('number', 'X');
+        data.addColumn('number', 'altitude (m)');
+        data.addColumn('number', '3d speed (m/min)');
+        data.addRows( {{ data.get("profile_data") }} )
+        var options = {
+          title: 'Profile Graph',
+          hAxis: {
+            title: 'Distance (km)'
+          },
+          series:{
+            0:{targetAxisIndex: 0},
+            1:{targetAxisIndex: 1}
+          },
+          vAxis: {
+            0: {title: 'Altitude (m)'},
+            1: {title: '3d speed (m/min)'}
+          },
+      };
+      var chart = new google.visualization.LineChart(document.getElementById('profile_graph'));
+      chart.draw(data, options);
+    }
+      
+    function gradeGraphDist() {
+        var data = new google.visualization.DataTable();
+        data.addColumn('number', 'X');
+        data.addColumn('number', '3D Distance(m)');
+        data.addRows( {{ data.get("grade_data_dist") }} )
+        var options = {
+            hAxis: {
+            title: 'Grade (%)'
+            },
+            vAxis: {
+            title: '3D Distance (m)'
+            },
+            title: 'Grade Distribution (3D Dist)',
+        };
+        var chart = new google.visualization.ColumnChart(document.getElementById('grade_graph_dist'));
+        chart.draw(data, options);
+    }
+
+    function gradeGraphTime() {
+        var data = new google.visualization.DataTable();
+        data.addColumn('number', 'X');
+        data.addColumn('number', 'Time(min)');
+        data.addRows( {{ data.get("grade_data_time") }} )
+        var options = {
+            hAxis: {
+            title: 'Grade (%)'
+            },
+            vAxis: {
+            title: 'Time (min)'
+            },
+            title: 'Grade Distribution (Time)',
+        };
+        var chart = new google.visualization.ColumnChart(document.getElementById('grade_graph_time'));
+        chart.draw(data, options);
+    }
+    
+    function gradeHorizontalVelocity() {
+        {% set (asc_filtered_gv, dsc_filtered_gv, asc_fitted_gv, dsc_fitted_gv) = data.get("grade_velocity_plot") %}
+        var data1 = new google.visualization.DataTable();
+	data1.addColumn('number', '');
+	data1.addColumn('number', 'Ascent');
+	data1.addRows( {{ asc_filtered_gv }})
+	var data2 = new google.visualization.DataTable();
+	data2.addColumn('number', '');
+	data2.addColumn('number', 'Descent');
+	data2.addRows( {{ dsc_filtered_gv }})
+	var data3 = new google.visualization.DataTable();
+	data3.addColumn('number', '');
+	data3.addColumn('number', 'Ascent Fitted');
+	data3.addRows( {{ asc_fitted_gv }})
+	var data4 = new google.visualization.DataTable();
+	data4.addColumn('number', '');
+	data4.addColumn('number', 'Descent Fitted');
+	data4.addRows( {{ dsc_fitted_gv }})
+	var options = {
+		title: 'Speed per grade(%)',
+		hAxis: {
+		title: 'Grade(%)',
+		},
+		vAxis: {
+		title: 'Horizontal Speed(km/h)'
+		},
+		series: {
+			0: { pointShape: 'star' },
+			1: { pointShape: 'star' },
+			2: { pointShape: 'triangle', lineWidth: 2, pointSize: 0},
+			3: { pointShape: 'triangle', lineWidth: 2, pointSize: 0}
+		},
+		pointSize: 12
+		};
+		var joinedData = google.visualization.data.join(data1, data2, 'full', [[0, 0]], [1], [1]);
+		var joinedData2 = google.visualization.data.join(joinedData, data3, 'full', [[0, 0]], [1,2], [1]);
+		var joinedData3 = google.visualization.data.join(joinedData2, data4, 'full', [[0, 0]], [1,2,3], [1]);
+		var chart = new google.visualization.ScatterChart(document.getElementById('grade_h_velocity'));
+		chart.draw(joinedData3, options);
+    }
+
+    function gradeVerticalVelocity() {
+        {% set (asc_filtered_gv, dsc_filtered_gv, asc_fitted_gv, dsc_fitted_gv) = data.get("grade_velocity_vertical_plot") %}
+        var data1 = new google.visualization.DataTable();
+	data1.addColumn('number', '');
+	data1.addColumn('number', 'Ascent');
+	data1.addRows( {{ asc_filtered_gv }})
+	var data2 = new google.visualization.DataTable();
+	data2.addColumn('number', '');
+	data2.addColumn('number', 'Descent');
+	data2.addRows( {{ dsc_filtered_gv }})
+	var data3 = new google.visualization.DataTable();
+	data3.addColumn('number', '');
+	data3.addColumn('number', 'Ascent Fitted');
+	data3.addRows( {{ asc_fitted_gv }})
+	var data4 = new google.visualization.DataTable();
+	data4.addColumn('number', '');
+	data4.addColumn('number', 'Descent Fitted');
+	data4.addRows( {{ dsc_fitted_gv }})
+	var options = {
+		title: 'Vertical Speed per grade(%)',
+		hAxis: {
+		title: 'Grade(%)',
+		},
+		vAxis: {
+		title: 'Vertical Speed(m/min)'
+		},
+		series: {
+			0: { pointShape: 'star' },
+			1: { pointShape: 'star' },
+			2: { pointShape: 'triangle', lineWidth: 2, pointSize: 0},
+			3: { pointShape: 'triangle', lineWidth: 2, pointSize: 0}
+		},
+		pointSize: 12
+		};
+		var joinedData = google.visualization.data.join(data1, data2, 'full', [[0, 0]], [1], [1]);
+		var joinedData2 = google.visualization.data.join(joinedData, data3, 'full', [[0, 0]], [1,2], [1]);
+		var joinedData3 = google.visualization.data.join(joinedData2, data4, 'full', [[0, 0]], [1,2,3], [1]);
+		var chart = new google.visualization.ScatterChart(document.getElementById('grade_v_velocity'));
+		chart.draw(joinedData3, options);
+    }
+
+    function drawMap() {
+        var opts = {
+            mapTypeId:  google.maps.MapTypeId.SATELLITE,
+        };
+        var map = new google.maps.Map(document.getElementById("trail_map"), opts);
+        {% set (coordinates, (min_lat, max_lat, min_long, max_long)) = data.get("routeCoordinates") %}
+        var trailDataCoordinates = [
+            {% for (lat, long) in coordinates %}new google.maps.LatLng({{ lat }}, {{ long }}),
+            {% endfor %}
+        ];
+        var trailPath = new google.maps.Polyline({
+            path: trailDataCoordinates,
+            strokeColor: "#FF0000",
+            strokeOpacity: 0.6,
+            strokeWeight: 5
+        });
+        var sw = new google.maps.LatLng({{ max_lat }} ,{{ min_long }} );
+        var ne = new google.maps.LatLng({{ min_lat }} ,{{ max_long }} );
+        var bounds = new google.maps.LatLngBounds(sw, ne);
+        map.fitBounds(bounds,5);
+        trailPath.setMap(map);
+    }
+
+</script>
+
+{% endblock %}
