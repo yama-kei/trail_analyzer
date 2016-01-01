@@ -44,7 +44,7 @@ class GvAnalyzer(object):
 			if accumulated_dist / total_dist > self.percentile:
 				return ag
 
-	def calculate_gv_curv(self, grade_velocity_data):
+	def calculate_gv_curve(self, grade_velocity_data):
 		"""
 		Calculate Grade v.s. Velocity Curve
 		"""
@@ -74,14 +74,18 @@ class GvAnalyzer(object):
 		self.max_vh_g = max_vh_g if math.fabs(self.dsc_ag - max_vh_g) > 3 else self.dsc_ag + 3
 		self.max_vh_val = filtered_gv_dict[self.max_vh_g]
 
-		# construct gv curv
+		# construct gv curve
 		self.gv_data = GVData()
 		self.gv_data.add_gv_data(filtered_gv_dict, self.max_vh_g, self.max_vh_val)
+		
+		# calculate estimated time
+		time_taken_estimated = self.estimate_time()
 		
 		# return filterd_gv, vh_max_g, vh_max, coefficients
 		result = {
 			"vh_max_grade": self.max_vh_g,
 			"vh_max_value": self.max_vh_val,
+			"estimated_time_taken": time_taken_estimated,
 			"asc_data": self.gv_data.asc_data.dump_data(),
 			"dsc_data": self.gv_data.dsc_data.dump_data(),
 		}
@@ -90,10 +94,10 @@ class GvAnalyzer(object):
 		result.get("dsc_data").update({"nth_percentile_grade": self.dsc_ag})
 		return result
 
-	# estimate() should take offset and other parameters
-	def estimate_time(self):
-		gd_hd_dict = {g:obj.total_distance() for g,obj in self.grade_distance_data.iteritems()}
-		t = self.gv_data.estimate_time(gd_hd_dict)
+	def estimate_time(self, gd_dict=None):
+		if not gd_dict:
+			gd_dict = self.grade_distance_data
+		t = self.gv_data.estimate_time(gd_dict)
 		return t
 
 
@@ -130,23 +134,17 @@ class GVData(object):
 		self.asc_data = GVCurvePoly(asc_vh_gv, offset, vhpeak, True)
 		self.dsc_data = GVCurvePoly(dsc_vh_gv, offset, vhpeak)
 
-		# save interesting values
-		self.asc_coefficients = self.asc_data.coefficients
-		self.dsc_coefficients = self.dsc_data.coefficients
-
 	def estimate_time(self, gd_data):
 		# estimate time taken based on grade v.s. 3D distance data
-        # need to convert 3D distance data to horizontal speed
 		total_time = 0
 		for g, dist in gd_data.iteritems():
-            # use cos(g) = D3d/Dh
-            h_dist = dist * math.tan(math.radians(g))
+			# use cos(g) = D3d/Dh to convert 3D distance to horizontal distance
+			h_dist = dist * math.cos(math.radians(g))
 			offsetted_grade = math.fabs(g - self.offset_g)
-			if g >= self.offset_g:
-				vh = exp_func(offsetted_grade, self.aac, self.adc)
-			else:
-				vh = exp_func(offsetted_grade, self.dac, self.ddc)
-			time_taken = h_dist / ((1000 * vh / 60) / 60)
+			#TODO: if g > Gt then use Vta or Vtd
+			gv_curve = self.asc_data if g >= self.offset_g else self.dsc_data
+			vh = exp_func(offsetted_grade, gv_curve.coefficients[0], gv_curve.coefficients[1])
+			time_taken = h_dist / ((1000 * vh / 60) / 60) # ...in seconds
 			total_time += time_taken
 		return total_time
 

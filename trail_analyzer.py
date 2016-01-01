@@ -25,11 +25,10 @@ class TrailAnalyzerNoGpxFileException(TrailAnalyzerException):
 	pass
 
 def dump_time(seconds):
-	# dumps time in HH:MM:SS syntax
+	# dumps time (in seconds) in HH:MM:SS syntax
 	m, s = divmod(seconds, 60)
 	h, m = divmod(m, 60)
 	return "%d:%02d:%02d" % (h, m, s)
-vh_peak = 0
 
 class TrackSegment(object):
 	# segment class, holoing infomration about point A to B
@@ -151,7 +150,7 @@ class TrackCollection(object):
 			self.track_data = TrackList([])
 		if input:
 			self.gpx = self.load(input)
-			self.track_data += self._construct_segment_data(self.gpx)
+			self.track_data += self.construct_segment_data(self.gpx)
 
 	def load(self, input):
 		try:
@@ -167,18 +166,24 @@ class TrackCollection(object):
 		gpx = self.load(input)
 		if not self.gpx:
 			self.gpx = gpx
-		self.track_data += self._construct_segment_data(gpx)
+		self.track_data += self.construct_segment_data(gpx)
 
-	def _construct_segment_data(self, gpx, start=None, end=None):
+	def construct_segment_data(self, gpx, start=None, end=None):
 		# construct segment data by going through gpx track data
 		# to be removed from TrackCollection
 		track_data = TrackList([])
 		previous_point = None
 		total_distance = 0
+		
+		# convert start/end from km to m
+		start = start * 1000 if start else None
+		end = end * 1000 if end else None
+		
 		for point in gpx.walk(only_points=True):
 			if previous_point:
 				track = TrackSegment(previous_point, point)
 				total_distance += track.dist
+				#print "total distance: " + str(total_distance)
 				if start and total_distance < start:
 					# before start dist -> skip
 					pass
@@ -193,9 +198,10 @@ class TrackCollection(object):
 			previous_point = point
 		return track_data
 
-	def construct_grade_dictionary(self):
+	def construct_grade_dictionary(self, track_data=None):
 		grade_dict = {}
-		for track in self.track_data:
+		track_data = self.track_data if track_data is None else track_data
+		for track in track_data:
 			g = int(round(track.grade))
 			if g in grade_dict.keys():
 				grade_dict[g].append(track)
@@ -224,8 +230,8 @@ class TrackCollection(object):
 			"ascent":"Total Ascent(m)",
 			"descent":"Total Descent(m)",
 			"moving_distance":"Moving Distance(km)",
-			"estimated_stopped_time":"Estimated Stopped Time(min)",
-			"estimated_total_time":"Estimated Total Time(min)",
+			#"estimated_stopped_time":"Estimated Stopped Time(min)",
+			#"estimated_total_time":"Estimated Total Time(min)",
 		}
 		# overall stat
 		track_data_dict["length_2d"] = self.gpx.length_2d() / 1000.0
@@ -238,25 +244,39 @@ class TrackCollection(object):
 
 class RecordData(TrackCollection):
 	gv_analysis = {}
-	def calculate_gv_curv(self):
+	def calculate_gv_curve(self, start=None, end=None):
 		"""
-		Calculate Grade v.s. Velocity Curv
+		Calculate Grade v.s. Velocity Curve
 		by calling GV Analyzer library
 		"""
-		gd = self.construct_grade_dictionary()
+		total_dist = int(self.gpx.length_2d() / 1000.0)
+		print "start: " + str(start) + " end: " + str(end) + " total_dist: " + str(total_dist)
+		start = start if start and start >= 0 and start < total_dist else None
+		end = end if end and end > (start if start else 0) and end < total_dist else None
+		print "start: " + str(start) + " end: " + str(end)
+		if start or end:
+			track_data = self.construct_segment_data(self.gpx, start, end)
+			gd = self.construct_grade_dictionary(track_data = track_data)
+		else:
+			gd = self.construct_grade_dictionary()
 		gd_dist_dict = {int(g):obj.total_distance_3d() for g,obj in gd.iteritems()}
 		gd_h_speed_dict = {int(g):obj.avg_horizontal_speed() for g,obj in gd.iteritems()}
 		# instantiate GVAnalyzer object
 		gva = GvAnalyzer(gd_dist_dict)
-		analyzed_data = gva.calculate_gv_curv(gd_h_speed_dict)
-		if "vh_max_grade" in analyzed_data.keys():
+		analyzed_data = gva.calculate_gv_curve(gd_h_speed_dict)
+		if "vh_max_grade" in analyzed_data.keys() and not (start or end):
+		#if "vh_max_grade" in analyzed_data.keys():
 			self.gv_analysis = analyzed_data
+		return analyzed_data
 
+	"""
 	def estimate_time(self):
 		gd = self.construct_grade_dictionary()
+		# pass 3D distance
 		gd_hd_dict = {g:obj.total_distance() for g,obj in gd.iteritems()}
 		t = self.gv_data.estimate_time(gd_hd_dict)
 		return t
+	"""
 
 	def dump(self):
 		track_data_dict = {}
@@ -284,6 +304,7 @@ class RecordData(TrackCollection):
 			"dsc_min_v":"Descent Threshold Velocity (m/min)",
 			"dsc_nth_percentile":"Descent Nth Percentile Grade (%)",
 			"dsc_asc_ratio":"Descent/Ascent Threshold Velocity Ratio",
+			"estimated_moving_time":"Estimated Moving Time",
 		}
 		# overall stat
 		start_time, end_time = self.gpx.get_time_bounds()
@@ -316,6 +337,7 @@ class RecordData(TrackCollection):
 			track_data_dict["asc_nth_percentile"] = self.gv_analysis.get("asc_data").get("nth_percentile_grade")
 			track_data_dict["dsc_nth_percentile"] = self.gv_analysis.get("dsc_data").get("nth_percentile_grade")
 			track_data_dict["dsc_asc_ratio"] = track_data_dict["dsc_min_v"] / track_data_dict["asc_min_v"]
+			track_data_dict["estimated_moving_time"] = dump_time(self.gv_analysis.get("estimated_time_taken"))
 
 		# get route data and update dictionary
 		(dump_header, dump_data) = super(RecordData, self).dump()
