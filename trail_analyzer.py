@@ -241,6 +241,16 @@ class TrackCollection(object):
 		track_data_dict["descent"] = -downhill
 		return (track_data_header, track_data_dict)
 
+	"""
+	def estimate_time(self):
+		# take GV curve parameters to estimate time taken
+		gd = self.construct_grade_dictionary()
+		# pass 3D distance
+		gd_hd_dict = {g:obj.total_distance() for g,obj in gd.iteritems()}
+		t = self.gv_data.estimate_time(gd_hd_dict)
+		return t
+	"""
+
 
 class RecordData(TrackCollection):
 	gv_analysis = {}
@@ -265,18 +275,14 @@ class RecordData(TrackCollection):
 		gva = GvAnalyzer(gd_dist_dict)
 		analyzed_data = gva.calculate_gv_curve(gd_h_speed_dict)
 		if "vh_max_grade" in analyzed_data.keys() and not (start or end):
-		#if "vh_max_grade" in analyzed_data.keys():
 			self.gv_analysis = analyzed_data
-		return analyzed_data
 
-	"""
-	def estimate_time(self):
-		gd = self.construct_grade_dictionary()
-		# pass 3D distance
-		gd_hd_dict = {g:obj.total_distance() for g,obj in gd.iteritems()}
-		t = self.gv_data.estimate_time(gd_hd_dict)
-		return t
-	"""
+		# run time taken estimation against entire course
+		gd_data_whole = {int(g):obj.total_distance_3d() for g,obj in self.construct_grade_dictionary().iteritems()}
+		t = gva.estimate_time(gd_data_whole)
+		analyzed_data["estimated_time_taken_whole"] = t
+
+		return analyzed_data
 
 	def dump(self):
 		track_data_dict = {}
@@ -288,8 +294,9 @@ class RecordData(TrackCollection):
 			"total_time":"Total Time",
 			"moving_distance":"Moving Distance(km)",
 			"stopped_distance":"Stopped Distance(km)",
+			"moving_time2":"Moving Time",
 			"stopped_time2":"Stopped Time",
-			"stopped_time_ratio":"Stopped Time Ratio",
+			"stopped_time_ratio":"Stopped Time Ratio (%)",
 			# GV analysis data
 			"vh_max_g":"Max Horizontal Speed Grade (%)",
 			"vh_max_v":"Max Horizontal Speed (km/h)",
@@ -320,6 +327,7 @@ class RecordData(TrackCollection):
 		# trail route data
 		stopped_time2 = self.stopped_time
 		track_data_dict["stopped_time2"] = dump_time(stopped_time2)
+		track_data_dict["moving_time2"] = dump_time(total_time - stopped_time2)
 		stopped_time_ratio = (100*stopped_time2 / total_time) if total_time != 0 else 0.0
 		track_data_dict["stopped_time_ratio"] = stopped_time_ratio
 

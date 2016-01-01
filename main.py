@@ -36,7 +36,7 @@ def analyze_exec(f, filename):
 	except TrailAnalyzerException as e:
 		return upload(e.args[0])
 	# calculate GV curv for activity
-	rd.calculate_gv_curv()
+	rd.calculate_gv_curve()
 	# dump data for metrics
 	(dump_header, dump_data) = rd.dump()
 	tg = TrailGraph(rd)
@@ -86,8 +86,8 @@ def gv_analyze():
 		# create GvAnalyzer object
 		gva = GvAnalyzer(gd_data)
 
-		# execute gv_curv analysis and return result
-		return json.dumps(gva.calculate_gv_curv(gv_data))
+		# execute GV analysis and return result
+		return json.dumps(gva.calculate_gv_curve(gv_data))
 	else:
 		return json.dumps({})
 

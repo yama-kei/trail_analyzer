@@ -143,7 +143,16 @@ class GVData(object):
 			offsetted_grade = math.fabs(g - self.offset_g)
 			#TODO: if g > Gt then use Vta or Vtd
 			gv_curve = self.asc_data if g >= self.offset_g else self.dsc_data
-			vh = exp_func(offsetted_grade, gv_curve.coefficients[0], gv_curve.coefficients[1])
+			if offsetted_grade > gv_curve.local_min[0]:
+				x = math.fabs(gv_curve.local_min[0] - self.offset_g)
+				print x
+				vh = exp_func(x,
+					gv_curve.coefficients[0],
+					gv_curve.coefficients[1])
+			else:
+				vh = exp_func(offsetted_grade,
+					gv_curve.coefficients[0],
+					gv_curve.coefficients[1])
 			time_taken = h_dist / ((1000 * vh / 60) / 60) # ...in seconds
 			total_time += time_taken
 		return total_time
@@ -218,7 +227,7 @@ class GVCurvePoly(GVCurve):
 		v_val_at_local_minimum = exp_func(x, self.coefficients[0], self.coefficients[1])
 		v_speed = v_val_at_local_minimum * math.tan(math.radians(g)) * 1000 / 60 # km/h -> m/min
 		self.local_min = [g, v_speed]
-		
+
 		"""
 		# DEBUG: re-calculate coefficients
 		# in: vhpeak, self.local_min[0], self.local_min[1]
